@@ -1,4 +1,4 @@
-# Import necessary libraries
+# Import necessary libraries and modules
 from metaflow import FlowSpec, step
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -6,86 +6,88 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 import joblib
 
-# Define the main flow for processing and classifying Jenkins logs
+# Define a Metaflow flow class named JenkinsLogFlow
 class JenkinsLogFlow(FlowSpec):
 
+    # Step 1: Reading and combining failure and success logs
     @step
     def start(self):
-        # Initialize dataset with mock Jenkins logs
-        # This is a sample dataset for demonstration purposes
-        self.logs = [
-            "Build failed due to timeout.",
-            "Compilation error in module X.",
-            "Tests passed successfully.",
-            "Deployment completed without errors.",
-            "Error connecting to database.",
-            "Successfully fetched the latest code.",
-            "Memory leak detected in module Y.",
-            "Connection timeout while fetching dependencies.",
-            "All unit tests passed.",
-            "Successfully built the Docker image."
-        ]
-        # Labels: 1 represents FAILURE and 0 represents SUCCESS
-        self.labels = [1, 1, 0, 0, 1, 0, 1, 1, 0, 0]
+        # Read failure logs from a file
+        with open("failure_logs.txt", "r") as f:
+            self.failure_logs = [line.strip() for line in f.readlines()]
 
-        # Proceed to the next step: Data Preparation
+        # Read success logs from a file
+        with open("success_logs.txt", "r") as f:
+            self.success_logs = [line.strip() for line in f.readlines()]
+
+        # Combine logs and labels, assign labels (1 for failure, 0 for success)
+        self.logs = self.failure_logs + self.success_logs
+        self.labels = [1] * len(self.failure_logs) + [0] * len(self.success_logs)
+
+        # Move to the next step for data preparation
         self.next(self.prepare_data)
 
+    # Step 2: Data preparation - converting text logs to numerical features
     @step
     def prepare_data(self):
-        # Convert text logs into a numerical matrix using TF-IDF vectorization
+        # Convert text logs to numerical features using TF-IDF vectorization
         self.vectorizer = TfidfVectorizer()
         X = self.vectorizer.fit_transform(self.logs)
         y = self.labels
 
-        # Split the dataset into training and test sets
+        # Split the data into training and testing sets
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
             X, y, test_size=0.33, random_state=42
         )
 
-        # Proceed to the next step: Model Training
+        # Move to the next step for model training
         self.next(self.train_model)
 
+    # Step 3: Model training - training a Random Forest classifier
     @step
     def train_model(self):
-        # Initialize and train a Random Forest classifier on the training data
+        # Train a Random Forest classifier with 100 estimators
         self.model = RandomForestClassifier(n_estimators=100)
         self.model.fit(self.X_train, self.y_train)
 
-        # Proceed to the next step: Model Validation
+        # Move to the next step for model validation
         self.next(self.validate_model)
 
+    # Step 4: Model validation - evaluating the trained model
     @step
     def validate_model(self):
-        # Predict the labels for the test set
+        # Validate the trained model on the test data
         predictions = self.model.predict(self.X_test)
-
-        # Calculate the accuracy and other metrics for the predictions
+        
+        # Calculate and store model accuracy
         self.accuracy = accuracy_score(self.y_test, predictions)
+        
+        # Generate and store a classification report
         self.classification_rep = classification_report(self.y_test, predictions)
 
-        # Print the results
+        # Print model accuracy and classification report
         print(f"Model accuracy: {self.accuracy:.2f}")
         print("Classification Report:")
         print(self.classification_rep)
 
-        # Proceed to the next step: Model Saving
+        # Move to the next step for saving the model
         self.next(self.save_model)
 
+    # Step 5: Saving the trained model and vectorizer to disk
     @step
     def save_model(self):
-        # Serialize and save the trained model and vectorizer to disk
+        # Save the trained model and TF-IDF vectorizer to disk as pickle files
         joblib.dump(self.model, 'trained_model.pkl')
         joblib.dump(self.vectorizer, 'tfidf_vectorizer.pkl')
 
-        # Proceed to the final step
+        # Move to the final step to mark the completion of the flow
         self.next(self.end)
 
+    # Step 6: Final step - Flow completion
     @step
     def end(self):
-        # Signal the completion of the flow
         print("JenkinsLogFlow is completed.")
 
-# Execute the flow if the script is run as the main module
+# Entry point: If the script is executed directly, create and run the JenkinsLogFlow
 if __name__ == "__main__":
     JenkinsLogFlow()
